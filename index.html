@@ -756,7 +756,10 @@ async function doRegister() {
 
   const { data, error } = await _supabase.auth.signUp({
     email, password: pwd,
-    options: { data: { username: name } }
+    options: {
+      data: { username: name },
+      emailRedirectTo: window.location.origin + '/',
+    }
   });
 
   if (error) { msg.className='auth-msg error'; msg.textContent=error.message; return; }
