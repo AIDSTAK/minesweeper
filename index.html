@@ -42,11 +42,11 @@
       box-shadow: 0 2px 16px rgba(59,142,212,0.3);
     }
     .header-inner {
-      max-width: 1100px; margin: 0 auto; padding: 0 20px;
+      max-width: 1180px; margin: 0 auto; padding: 0 20px;
       display: flex; align-items: center; justify-content: space-between;
     }
     .logo-area { display: flex; align-items: center; gap: 12px; }
-    .logo-img { width: 50px; height: 50px; border-radius: 12px; object-fit: cover; border: 2px solid rgba(255,255,255,0.5); box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+    .logo-img { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; border: 3px solid rgba(255,255,255,0.55); box-shadow: 0 2px 10px rgba(0,0,0,0.15); }
     .site-name { font-size: 22px; font-weight: 700; color: #fff; letter-spacing: 1px; }
     .site-name .sub { font-size: 12px; font-weight: 400; opacity: 0.85; display: block; }
 
@@ -69,8 +69,8 @@
 
     /* ── Layout ────────────────────────── */
     .main-wrap {
-      max-width: 1100px; margin: 24px auto; padding: 0 20px;
-      display: grid; grid-template-columns: 280px 1fr; gap: 24px;
+      max-width: 1180px; margin: 24px auto; padding: 0 20px;
+      display: grid; grid-template-columns: 270px 1fr 240px; gap: 20px;
       align-items: start;
     }
 
@@ -123,6 +123,42 @@
       transition: all 0.15s;
     }
     .tag:hover { background: var(--dora-blue); color: #fff; }
+
+    /* ── Right Sidebar (Games) ─────────── */
+    .right-sidebar {
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    .right-sidebar .side-card { padding: 16px 18px; }
+    .right-sidebar .game-vert {
+      display: block; text-decoration: none; color: var(--text);
+      background: var(--card); border-radius: var(--radius);
+      box-shadow: var(--shadow); overflow: hidden;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .right-sidebar .game-vert:hover {
+      transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+    }
+    .right-sidebar .gv-cover {
+      height: 110px; display: flex; align-items: center; justify-content: center;
+      font-size: 38px; position: relative;
+    }
+    .right-sidebar .gv-cover.minesweeper { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .right-sidebar .gv-cover.coming    { background: linear-gradient(135deg, #e8e8e8 0%, #c0c0c0 100%); }
+    .right-sidebar .gv-badge {
+      position: absolute; top: 8px; right: 8px;
+      background: var(--dora-red); color: #fff; font-size: 10px; font-weight: 700;
+      padding: 2px 8px; border-radius: 8px;
+    }
+    .right-sidebar .gv-body { padding: 12px 14px; }
+    .right-sidebar .gv-body h4 { font-size: 14px; margin-bottom: 3px; }
+    .right-sidebar .gv-body p  { font-size: 12px; color: var(--text-light); margin-bottom: 8px; line-height: 1.5; }
+    .right-sidebar .btn-play-sm {
+      display: inline-block; padding: 4px 14px; border-radius: 16px;
+      background: var(--dora-blue); color: #fff; text-decoration: none;
+      font-size: 12px; font-weight: 500; transition: background 0.2s;
+    }
+    .right-sidebar .btn-play-sm:hover { background: var(--dora-dark); }
+    .right-sidebar .btn-play-sm.disabled { background: #ccc; cursor: default; pointer-events: none; }
 
     /* ── Main Content ──────────────────── */
     .content-col { display: flex; flex-direction: column; gap: 20px; }
@@ -273,10 +309,15 @@
     .auth-msg.error { color: var(--dora-red); }
 
     /* ── Responsive ────────────────────── */
+    @media (max-width: 900px) {
+      .main-wrap { grid-template-columns: 240px 1fr; }
+      .right-sidebar { display: none; }
+    }
     @media (max-width: 768px) {
       .main-wrap { grid-template-columns: 1fr; }
       .sidebar { order: 2; }
       .content-col { order: 1; }
+      .right-sidebar { display: none; }
       .game-grid { grid-template-columns: 1fr; }
       .site-name { font-size: 17px; }
     }
@@ -288,7 +329,7 @@
 <header class="site-header">
   <div class="header-inner">
     <div class="logo-area">
-      <img class="logo-img" src="doraemon-logo.png" alt="小叮当" />
+      <img class="logo-img" src="Cute_Doraemon_robot_cat_charac_2026-06-02T02-40-00.png" alt="小叮当" />
       <div class="site-name">
         小叮当的游戏口袋
         <span class="sub">—— 博客主人的游戏天地</span>
@@ -351,27 +392,6 @@
 
   <!-- ── MAIN CONTENT ── -->
   <div class="content-col">
-    <!-- GAMES SECTION -->
-    <div class="section-header"><h2>🎲 我的游戏</h2><div class="line"></div></div>
-    <div class="game-grid" id="games-all">
-      <div class="game-card">
-        <div class="game-cover minesweeper"><span class="game-badge">HOT</span>💣</div>
-        <div class="game-body">
-          <h4>💣 网页扫雷</h4>
-          <p>经典扫雷，三种难度，实时排行榜！注册后可提交成绩，与好友一较高下。</p>
-          <a class="btn-play" href="games/minesweeper.html">开始游戏 →</a>
-        </div>
-      </div>
-      <div class="game-card">
-        <div class="game-cover coming">🔮</div>
-        <div class="game-body">
-          <h4>🤫 新游戏开发中</h4>
-          <p>下一个项目正在构思中，可能是放置类、塔防或者休闲益智，敬请期待！</p>
-          <span class="btn-play" style="background:#ccc;cursor:default;">敬请期待</span>
-        </div>
-      </div>
-    </div>
-
     <!-- BLOG POSTS -->
     <div class="section-header"><h2>📝 最新文章</h2><div class="line"></div></div>
     <div id="posts-container">
@@ -440,6 +460,29 @@
       <div id="msg-list"></div>
     </div>
   </div>
+
+  <!-- ── RIGHT SIDEBAR (Games) ── -->
+  <aside class="right-sidebar" id="game-sidebar">
+    <div class="side-card">
+      <h3><span class="ico">🎲</span> 我的游戏</h3>
+    </div>
+    <a class="game-vert" href="games/minesweeper.html">
+      <div class="gv-cover minesweeper"><span class="gv-badge">HOT</span>💣</div>
+      <div class="gv-body">
+        <h4>💣 网页扫雷</h4>
+        <p>经典扫雷，三种难度，实时排行榜！注册后与好友一较高下。</p>
+        <span class="btn-play-sm">开始游戏 →</span>
+      </div>
+    </a>
+    <div class="game-vert">
+      <div class="gv-cover coming">🔮</div>
+      <div class="gv-body">
+        <h4>🤫 新游戏开发中</h4>
+        <p>放置类、塔防还是休闲益智？敬请期待！</p>
+        <span class="btn-play-sm disabled">敬请期待</span>
+      </div>
+    </div>
+  </aside>
 </div>
 
 <!-- ========== FOOTER ========== -->
