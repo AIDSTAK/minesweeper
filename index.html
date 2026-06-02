@@ -781,28 +781,27 @@ async function doLogin() {
   if (!email || !pwd) { msg.className='auth-msg error'; msg.textContent='请填写邮箱和密码'; return; }
   msg.className='auth-msg'; msg.textContent='登录中…';
 
-  const { data, error } = await _supabase.auth.signInWithPassword({ email, password: pwd });
-  if (error) { msg.className='auth-msg error'; msg.textContent=error.message; return; }
-
-  closeAuth();
+  try {
+    const { data, error } = await _supabase.auth.signInWithPassword({ email, password: pwd });
+    if (error) { msg.className='auth-msg error'; msg.textContent=error.message; return; }
+    closeAuth();
+  } catch (err) {
+    console.error('登录异常:', err);
+    msg.className='auth-msg error'; msg.textContent='登录失败，请检查网络后重试';
+  }
 }
 
 async function logout() {
-  // 1. 先把 UI 切回未登录状态（不依赖 onAuthStateChange）
-  currentUser = null;
-  updateAuthUI();
-
-  // 2. 清除 Supabase 本地存储
+  // 1. 清除 Supabase 本地存储
   Object.keys(localStorage).forEach(k => {
     if (k.startsWith('sb-') || k.startsWith('supabase')) localStorage.removeItem(k);
   });
 
-  // 3. 调 Supabase 服务端退出（清除 cookie）
-  try {
-    await _supabase.auth.signOut();
-  } catch (e) {
-    // 即使服务端退出失败，本地已清除，不影响
-  }
+  // 2. 调 Supabase 服务端退出
+  try { await _supabase.auth.signOut(); } catch (e) {}
+
+  // 3. 刷新页面，确保客户端状态完全重置
+  location.reload();
 }
 
 function updateAuthUI() {
