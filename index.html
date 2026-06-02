@@ -492,6 +492,7 @@ let flagCount = 0;
 let timerVal = 0;
 let timerInterval = null;
 let firstClick = true;
+let finishedAt = null; // 通关那一刻的时间戳（秒）
 let currentUser = null;
 let lbDiff = 'easy';
 let lbChannel = null;
@@ -511,6 +512,7 @@ function selectDiff(d) {
 function newGame() {
   clearInterval(timerInterval);
   timerVal = 0;
+  finishedAt = null;
   flagCount = 0;
   firstClick = true;
   gameState = 'idle';
@@ -636,6 +638,7 @@ function checkWin() {
   if (allOpened) {
     gameState = 'won';
     clearInterval(timerInterval);
+    finishedAt = timerVal; // 记录通关时的用时，防止后续 timerVal 被意外修改
     document.getElementById('smiley-btn').textContent = '😎';
     showResult(true);
   } else {
@@ -648,10 +651,10 @@ function showResult(won) {
   banner.style.display = 'block';
   if (won) {
     banner.className = 'win';
-    banner.textContent = `🎉 恭喜通关！用时 ${timerVal} 秒`;
+    banner.textContent = `🎉 恭喜通关！用时 ${finishedAt} 秒`;
     // Prompt submit
     if (currentUser) {
-      document.getElementById('submit-msg').textContent = `提交你的成绩 ${timerVal} 秒到排行榜？`;
+      document.getElementById('submit-msg').textContent = `提交你的成绩 ${finishedAt} 秒到排行榜？`;
       document.getElementById('submit-score-section').style.display = 'block';
     } else {
       document.getElementById('submit-msg').textContent = '登录后可提交成绩到排行榜';
@@ -857,7 +860,7 @@ async function submitScore() {
     .eq('difficulty', currentDiff)
     .maybeSingle();
 
-  if (existing && existing.time_seconds <= timerVal) {
+  if (existing && existing.time_seconds <= finishedAt) {
     sec.innerHTML = '<p style="color:#888;font-size:13px;">你已有更好的成绩，未更新排行榜。</p>';
     return;
   }
@@ -866,7 +869,7 @@ async function submitScore() {
     user_id:      currentUser.id,
     username:     profile?.username || currentUser.email,
     difficulty:   currentDiff,
-    time_seconds: timerVal,
+    time_seconds: finishedAt,
     created_at:   new Date().toISOString(),
   }, { onConflict: 'user_id,difficulty' });
 
