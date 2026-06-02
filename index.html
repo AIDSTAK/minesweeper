@@ -827,15 +827,18 @@ _supabase.auth.onAuthStateChange(async (event, session) => {
   currentUser = session?.user ?? null;
   updateAuthUI();
 
+  const userDisplay = document.getElementById('user-display');
+  if (!userDisplay) return;
+
   if (currentUser) {
-    const userDisplay = document.getElementById('user-display');
+    // 优先用注册时存的 metadata，不用等 profiles 表查询
+    let name = currentUser.user_metadata?.username || currentUser.email || '用户';
+    userDisplay.textContent = name;
+    // 后台尝试从 profiles 表取更准确的用户名
     try {
       const { data } = await _supabase.from('profiles').select('username').eq('id', currentUser.id).single();
-      const name = data?.username || currentUser.email;
-      userDisplay.textContent = name;
-    } catch {
-      userDisplay.textContent = currentUser.email;
-    }
+      if (data?.username) userDisplay.textContent = data.username;
+    } catch {}
   }
 });
 
