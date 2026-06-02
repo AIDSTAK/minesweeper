@@ -869,26 +869,37 @@ async function loadLeaderboard(diff) {
   const list = document.getElementById('lb-list');
   list.innerHTML = '<li class="lb-empty">加载中…</li>';
 
-  const { data, error } = await _supabase
-    .from('scores')
-    .select('username, time_seconds')
-    .eq('difficulty', diff)
-    .order('time_seconds', { ascending: true })
-    .limit(20);
+  try {
+    const { data, error } = await _supabase
+      .from('scores')
+      .select('username, time_seconds')
+      .eq('difficulty', diff)
+      .order('time_seconds', { ascending: true })
+      .limit(20);
 
-  if (error || !data?.length) {
-    list.innerHTML = '<li class="lb-empty">暂无记录</li>';
-    return;
+    if (error) {
+      console.error('排行榜加载失败:', error.message);
+      list.innerHTML = `<li class="lb-empty">加载失败: ${error.message}</li>`;
+      return;
+    }
+
+    if (!data?.length) {
+      list.innerHTML = '<li class="lb-empty">暂无记录，快来挑战！</li>';
+      return;
+    }
+
+    list.innerHTML = data.map((row, i) => {
+      const rankClass = i < 3 ? ` r${i+1}` : '';
+      return `<li>
+        <span class="lb-rank${rankClass}">${i+1}</span>
+        <span class="lb-name">${escapeHtml(row.username)}</span>
+        <span class="lb-time">${row.time_seconds}s</span>
+      </li>`;
+    }).join('');
+  } catch (err) {
+    console.error('排行榜请求异常:', err);
+    list.innerHTML = '<li class="lb-empty">加载失败，请刷新重试</li>';
   }
-
-  list.innerHTML = data.map((row, i) => {
-    const rankClass = i < 3 ? ` r${i+1}` : '';
-    return `<li>
-      <span class="lb-rank${rankClass}">${i+1}</span>
-      <span class="lb-name">${escapeHtml(row.username)}</span>
-      <span class="lb-time">${row.time_seconds}s</span>
-    </li>`;
-  }).join('');
 }
 
 function escapeHtml(s) {
