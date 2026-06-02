@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>网页扫雷 · Minesweeper</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    /* ── Reset & Base ─────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #f0f0f0;
+      --panel: #ffffff;
+      --border: #d0d0d0;
+      --cell-cover: #bdbdbd;
+      --cell-hover: #d4d4d4;
+      --cell-open: #e8e8e8;
+      --cell-border-light: #ffffff;
+      --cell-border-dark: #9e9e9e;
+      --mine-color: #e53935;
+      --flag-color: #e53935;
+      --accent: #1976d2;
+      --accent-hover: #1565c0;
+      --text: #212121;
+      --text-sub: #616161;
+      --danger: #e53935;
+      --success: #388e3c;
+      --win-bg: #e8f5e9;
+      --lose-bg: #ffebee;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* ── Header ───────────────────────────────────────── */
+    header {
+      width: 100%;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    header h1 { font-size: 18px; font-weight: 600; letter-spacing: .02em; }
+    header h1 span { color: var(--accent); }
+    .header-right { display: flex; align-items: center; gap: 12px; font-size: 14px; }
+    .user-badge {
+      background: #e3f2fd;
+      color: var(--accent);
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-weight: 500;
+    }
+    button {
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-size: 13px;
+      color: var(--text);
+      transition: background .15s, border-color .15s;
+    }
+    button:hover { background: #f5f5f5; border-color: #aaa; }
+    button.primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+    button.danger { color: var(--danger); border-color: #ffcdd2; }
+    button.danger:hover { background: #ffebee; }
+
+    /* ── Main layout ──────────────────────────────────── */
+    main {
+      width: 100%;
+      max-width: 1200px;
+      padding: 24px 16px;
+      display: grid;
+      grid-template-columns: 1fr 300px;
+      gap: 24px;
+      align-items: start;
+    }
+    @media (max-width: 780px) {
+      main { grid-template-columns: 1fr; }
+    }
+
+    /* ── Panels ───────────────────────────────────────── */
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .panel-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: var(--text-sub);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+
+    /* ── Difficulty selector ──────────────────────────── */
+    .diff-btns { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .diff-btn {
+      flex: 1;
+      min-width: 80px;
+      padding: 8px 0;
+      text-align: center;
+      font-size: 13px;
+      border-radius: 8px;
+    }
+    .diff-btn.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    /* ── Game status bar ──────────────────────────────── */
+    .game-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #f5f5f5;
+      border-radius: 8px;
+      padding: 10px 16px;
+      margin-bottom: 16px;
+      font-size: 15px;
+      font-variant-numeric: tabular-nums;
+    }
+    .game-bar .stat { display: flex; align-items: center; gap: 6px; font-weight: 500; }
+    .game-bar .stat svg { width: 18px; height: 18px; flex-shrink: 0; }
+    #smiley-btn {
+      font-size: 22px;
+      background: none;
+      border: none;
+      padding: 0 8px;
+      cursor: pointer;
+      transition: transform .1s;
+    }
+    #smiley-btn:hover { transform: scale(1.2); }
+
+    /* ── Board ────────────────────────────────────────── */
+    #board-wrap {
+      overflow-x: auto;
+      display: flex;
+      justify-content: center;
+    }
+    #board {
+      display: inline-grid;
+      gap: 0;
+      border: 3px solid #9e9e9e;
+      border-right-color: #fff;
+      border-bottom-color: #fff;
+      user-select: none;
+    }
+    .cell {
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      border: 2px solid;
+      border-color: #fff #9e9e9e #9e9e9e #fff;
+      background: var(--cell-cover);
+      position: relative;
+      transition: background .08s;
+    }
+    .cell:hover:not(.open):not(.game-over-cell) { background: var(--cell-hover); }
+    .cell.open {
+      background: var(--cell-open);
+      border-color: #bdbdbd;
+      cursor: default;
+    }
+    .cell.flag { background: var(--cell-cover); }
+    .cell.flag::after {
+      content: "🚩";
+      font-size: 14px;
+    }
+    .cell.mine-hit { background: var(--mine-color); }
+    .cell.mine-reveal { background: var(--cell-open); }
+    .cell.mine-reveal::after { content: "💣"; font-size: 14px; }
+    .cell.wrong-flag { background: #ffcdd2; }
+    .cell.wrong-flag::after { content: "❌"; font-size: 12px; }
+    .n1 { color: #1565c0; }
+    .n2 { color: #2e7d32; }
+    .n3 { color: #c62828; }
+    .n4 { color: #4527a0; }
+    .n5 { color: #6d4c41; }
+    .n6 { color: #00838f; }
+    .n7 { color: #37474f; }
+    .n8 { color: #616161; }
+
+    /* ── Game over overlay ────────────────────────────── */
+    #result-banner {
+      display: none;
+      margin-top: 14px;
+      padding: 14px 16px;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 500;
+      text-align: center;
+    }
+    #result-banner.win { background: var(--win-bg); color: var(--success); border: 1px solid #a5d6a7; }
+    #result-banner.lose { background: var(--lose-bg); color: var(--danger); border: 1px solid #ef9a9a; }
+
+    /* ── Auth modal ───────────────────────────────────── */
+    .modal-bg {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.45);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-bg.open { display: flex; }
+    .modal {
+      background: var(--panel);
+      border-radius: 16px;
+      padding: 32px 28px;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.18);
+    }
+    .modal h2 { font-size: 20px; margin-bottom: 20px; text-align: center; }
+    .modal .tabs { display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid var(--border); }
+    .modal .tab {
+      flex: 1;
+      text-align: center;
+      padding: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-sub);
+      border: none;
+      background: none;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      transition: color .15s, border-color .15s;
+    }
+    .modal .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; font-size: 13px; color: var(--text-sub); margin-bottom: 5px; }
+    .form-group input {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color .15s;
+    }
+    .form-group input:focus { border-color: var(--accent); }
+    .auth-submit { width: 100%; padding: 10px; font-size: 15px; margin-top: 6px; }
+    .auth-msg { font-size: 13px; text-align: center; margin-top: 10px; min-height: 20px; }
+    .auth-msg.error { color: var(--danger); }
+    .auth-msg.success { color: var(--success); }
+    .modal-close {
+      position: absolute;
+      top: 12px; right: 14px;
+      font-size: 22px;
+      cursor: pointer;
+      color: var(--text-sub);
+      background: none;
+      border: none;
+      line-height: 1;
+    }
+
+    /* ── Leaderboard ──────────────────────────────────── */
+    .lb-tabs { display: flex; gap: 4px; margin-bottom: 14px; }
+    .lb-tab {
+      flex: 1;
+      padding: 5px 0;
+      font-size: 12px;
+      text-align: center;
+      border-radius: 6px;
+    }
+    .lb-tab.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    #lb-list { list-style: none; }
+    #lb-list li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 4px;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 13px;
+    }
+    #lb-list li:last-child { border-bottom: none; }
+    .lb-rank {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 600;
+      flex-shrink: 0;
+      background: #e0e0e0;
+      color: #555;
+    }
+    .lb-rank.r1 { background: #ffd700; color: #5d4000; }
+    .lb-rank.r2 { background: #c0c0c0; color: #3d3d3d; }
+    .lb-rank.r3 { background: #cd7f32; color: #fff; }
+    .lb-name { flex: 1; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lb-time { color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums; }
+    .lb-empty { text-align: center; color: var(--text-sub); font-size: 13px; padding: 20px 0; }
+    .lb-retry { margin-top: 8px; padding: 4px 14px; border: 1px solid var(--accent); border-radius: 4px; background: none; color: var(--accent); font-size: 12px; cursor: pointer; }
+    .lb-retry:hover { background: var(--accent); color: #fff; }
+    .lb-live-dot {
+      display: inline-block;
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--success);
+      margin-right: 5px;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: .3; }
+    }
+
+    /* ── Submit score prompt ──────────────────────────── */
+    #submit-score-section {
+      display: none;
+      margin-top: 14px;
+      padding: 14px;
+      background: #e3f2fd;
+      border-radius: 10px;
+      text-align: center;
+      font-size: 14px;
+    }
+    #submit-score-section p { margin-bottom: 10px; color: var(--accent); font-weight: 500; }
+    #submit-score-section .btns { display: flex; gap: 8px; justify-content: center; }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ─────────────────────────────────────── -->
+<header>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <a href="../index.html" style="color:var(--accent);text-decoration:none;font-size:13px;">← 返回首页</a>
+    <h1 style="margin:0;">💣 <span>网页</span>扫雷</h1>
+  </div>
+  <div class="header-right">
+    <span id="user-display" style="display:none" class="user-badge"></span>
+    <button id="btn-login" onclick="openAuth()">登录 / 注册</button>
+    <button id="btn-logout" class="danger" style="display:none" onclick="logout()">退出</button>
+  </div>
+</header>
+
+<!-- ── Main ───────────────────────────────────────── -->
+<main>
+  <!-- Left: Game -->
+  <div>
+    <div class="panel">
+      <div class="panel-title">选择难度</div>
+      <div class="diff-btns">
+        <button class="diff-btn active" data-diff="easy"   onclick="selectDiff('easy')">初级<br><small>9×9 · 10雷</small></button>
+        <button class="diff-btn"        data-diff="medium" onclick="selectDiff('medium')">中级<br><small>16×16 · 40雷</small></button>
+        <button class="diff-btn"        data-diff="hard"   onclick="selectDiff('hard')">高级<br><small>16×30 · 99雷</small></button>
+      </div>
+
+      <div class="game-bar">
+        <div class="stat">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#e53935" stroke-width="2"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span id="mine-count">10</span>
+        </div>
+        <button id="smiley-btn" onclick="newGame()" title="新游戏">🙂</button>
+        <div class="stat">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#1976d2" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+          <span id="timer-display">000</span>
+        </div>
+      </div>
+
+      <div id="board-wrap">
+        <div id="board"></div>
+      </div>
+
+      <div id="result-banner"></div>
+      <div id="submit-score-section">
+        <p id="submit-msg"></p>
+        <div class="btns">
+          <button class="primary" onclick="submitScore()">提交成绩</button>
+          <button onclick="document.getElementById('submit-score-section').style.display='none'">跳过</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Leaderboard -->
+  <div>
+    <div class="panel">
+      <div class="panel-title">
+        <span class="lb-live-dot"></span>实时排行榜
+      </div>
+      <div class="lb-tabs">
+        <button class="lb-tab active" data-d="easy"   onclick="switchLbDiff('easy')">初级</button>
+        <button class="lb-tab"        data-d="medium" onclick="switchLbDiff('medium')">中级</button>
+        <button class="lb-tab"        data-d="hard"   onclick="switchLbDiff('hard')">高级</button>
+      </div>
+      <ul id="lb-list"><li class="lb-empty">加载中…</li></ul>
+    </div>
+  </div>
+</main>
+
+<!-- ── Auth Modal ──────────────────────────────────── -->
+<div class="modal-bg" id="auth-modal">
+  <div class="modal" style="position:relative">
+    <button class="modal-close" onclick="closeAuth()">×</button>
+    <div class="tabs">
+      <button class="tab active" id="tab-login"    onclick="switchTab('login')">登录</button>
+      <button class="tab"        id="tab-register" onclick="switchTab('register')">注册</button>
+    </div>
+
+    <!-- Login form -->
+    <div id="form-login">
+      <div class="form-group">
+        <label>邮箱</label>
+        <input type="email" id="login-email" placeholder="your@email.com" />
+      </div>
+      <div class="form-group">
+        <label>密码</label>
+        <input type="password" id="login-pwd" placeholder="••••••••" />
+      </div>
+      <button class="primary auth-submit" onclick="doLogin()">登录</button>
+      <p class="auth-msg" id="login-msg"></p>
+    </div>
+
+    <!-- Register form -->
+    <div id="form-register" style="display:none">
+      <div class="form-group">
+        <label>用户名（游戏昵称）</label>
+        <input type="text" id="reg-name" placeholder="玩家昵称" />
+      </div>
+      <div class="form-group">
+        <label>邮箱</label>
+        <input type="email" id="reg-email" placeholder="your@email.com" />
+      </div>
+      <div class="form-group">
+        <label>密码（至少 6 位）</label>
+        <input type="password" id="reg-pwd" placeholder="••••••••" />
+      </div>
+      <button class="primary auth-submit" onclick="doRegister()">注册</button>
+      <p class="auth-msg" id="reg-msg"></p>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════
+   0. SUPABASE 配置
+   ─────────────────────────────────────────────────────
+   ⚠️ 请将下方两个值替换为你的 Supabase 项目信息：
+      SUPABASE_URL  → 你的 Project URL
+      SUPABASE_KEY  → 你的 anon/public API Key
+   在 Supabase 控制台 → Project Settings → API 找到
+═══════════════════════════════════════════════════════ */
+const SUPABASE_URL = 'https://xlubzmswdwkodpjunegn.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhsdWJ6bXN3ZHdrb2RwanVuZWduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzNDMxMjIsImV4cCI6MjA5NTkxOTEyMn0.kPMRZak3rkdMM3NTAOK6B4Kl1ouuuW5oaQAGczMvqn8';
+
+const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+/* ═══════════════════════════════════════════════════════
+   1. 游戏配置
+═══════════════════════════════════════════════════════ */
+const CONFIGS = {
+  easy:   { rows: 9,  cols: 9,  mines: 10 },
+  medium: { rows: 16, cols: 16, mines: 40 },
+  hard:   { rows: 16, cols: 30, mines: 99 },
+};
+
+let currentDiff = 'easy';
+let board = [];
+let minePos = new Set();
+let gameState = 'idle'; // idle | playing | won | lost
+let flagCount = 0;
+let timerVal = 0;
+let timerInterval = null;
+let firstClick = true;
+let finishedAt = null; // 通关那一刻的时间戳（秒）
+let currentUser = null;
+let lbDiff = 'easy';
+let lbChannel = null;
+
+/* ═══════════════════════════════════════════════════════
+   2. 难度选择
+═══════════════════════════════════════════════════════ */
+function selectDiff(d) {
+  currentDiff = d;
+  document.querySelectorAll('.diff-btn').forEach(b => b.classList.toggle('active', b.dataset.diff === d));
+  newGame();
+}
+
+/* ═══════════════════════════════════════════════════════
+   3. 游戏核心
+═══════════════════════════════════════════════════════ */
+function newGame() {
+  clearInterval(timerInterval);
+  timerVal = 0;
+  finishedAt = null;
+  flagCount = 0;
+  firstClick = true;
+  gameState = 'idle';
+  document.getElementById('smiley-btn').textContent = '🙂';
+  document.getElementById('timer-display').textContent = '000';
+  document.getElementById('result-banner').style.display = 'none';
+  document.getElementById('result-banner').className = '';
+  document.getElementById('submit-score-section').style.display = 'none';
+
+  const { rows, cols, mines } = CONFIGS[currentDiff];
+  document.getElementById('mine-count').textContent = mines;
+
+  // Init board cells
+  board = Array.from({ length: rows }, (_, r) =>
+    Array.from({ length: cols }, (_, c) => ({
+      r, c, mine: false, open: false, flag: false, adj: 0
+    }))
+  );
+  minePos.clear();
+  renderBoard();
+}
+
+function placeMines(skipR, skipC) {
+  const { rows, cols, mines } = CONFIGS[currentDiff];
+  const skip = new Set();
+  // Protect first click and neighbors
+  for (let dr = -1; dr <= 1; dr++)
+    for (let dc = -1; dc <= 1; dc++) {
+      const nr = skipR + dr, nc = skipC + dc;
+      if (nr >= 0 && nr < rows && nc >= 0 && nc < cols)
+        skip.add(nr * cols + nc);
+    }
+  while (minePos.size < mines) {
+    const idx = Math.floor(Math.random() * rows * cols);
+    if (!skip.has(idx)) minePos.add(idx);
+  }
+  minePos.forEach(idx => {
+    board[Math.floor(idx / cols)][idx % cols].mine = true;
+  });
+  // Calc adjacency
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++)
+      if (!board[r][c].mine)
+        board[r][c].adj = neighbors(r, c).filter(([nr, nc]) => board[nr][nc].mine).length;
+}
+
+function neighbors(r, c) {
+  const { rows, cols } = CONFIGS[currentDiff];
+  const res = [];
+  for (let dr = -1; dr <= 1; dr++)
+    for (let dc = -1; dc <= 1; dc++) {
+      if (dr === 0 && dc === 0) continue;
+      const nr = r + dr, nc = c + dc;
+      if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) res.push([nr, nc]);
+    }
+  return res;
+}
+
+function revealCell(r, c) {
+  const cell = board[r][c];
+  if (cell.open || cell.flag) return;
+
+  if (firstClick) {
+    firstClick = false;
+    placeMines(r, c);
+    gameState = 'playing';
+    timerInterval = setInterval(() => {
+      timerVal++;
+      document.getElementById('timer-display').textContent = String(timerVal).padStart(3, '0');
+      if (timerVal >= 999) clearInterval(timerInterval);
+    }, 1000);
+  }
+
+  if (cell.mine) {
+    gameState = 'lost';
+    clearInterval(timerInterval);
+    cell.open = true;
+    revealAllMines();
+    document.getElementById('smiley-btn').textContent = '😵';
+    showResult(false);
+    return;
+  }
+
+  // Flood fill
+  const stack = [[r, c]];
+  while (stack.length) {
+    const [cr, cc] = stack.pop();
+    const cur = board[cr][cc];
+    if (cur.open || cur.flag || cur.mine) continue;
+    cur.open = true;
+    if (cur.adj === 0) neighbors(cr, cc).forEach(([nr, nc]) => stack.push([nr, nc]));
+  }
+
+  checkWin();
+}
+
+function toggleFlag(r, c) {
+  if (gameState === 'idle' || gameState === 'won' || gameState === 'lost') return;
+  const cell = board[r][c];
+  if (cell.open) return;
+  const { mines } = CONFIGS[currentDiff];
+  if (!cell.flag && (mines - flagCount) <= 0) return;
+  cell.flag = !cell.flag;
+  flagCount += cell.flag ? 1 : -1;
+  document.getElementById('mine-count').textContent = mines - flagCount;
+  renderBoard();
+}
+
+function revealAllMines() {
+  const { rows, cols } = CONFIGS[currentDiff];
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++) {
+      const cell = board[r][c];
+      if (cell.mine && !cell.flag) cell.open = true;
+      if (cell.flag && !cell.mine) cell.wrongFlag = true;
+    }
+  renderBoard();
+}
+
+function checkWin() {
+  const { rows, cols } = CONFIGS[currentDiff];
+  const allOpened = board.flat().every(c => c.mine || c.open);
+  if (allOpened) {
+    gameState = 'won';
+    clearInterval(timerInterval);
+    finishedAt = timerVal; // 记录通关时的用时，防止后续 timerVal 被意外修改
+    document.getElementById('smiley-btn').textContent = '😎';
+    showResult(true);
+  } else {
+    renderBoard();
+  }
+}
+
+function showResult(won) {
+  const banner = document.getElementById('result-banner');
+  banner.style.display = 'block';
+  if (won) {
+    banner.className = 'win';
+    banner.textContent = `🎉 恭喜通关！用时 ${finishedAt} 秒`;
+    // Prompt submit
+    if (currentUser) {
+      document.getElementById('submit-msg').textContent = `提交你的成绩 ${finishedAt} 秒到排行榜？`;
+      document.getElementById('submit-score-section').style.display = 'block';
+    } else {
+      document.getElementById('submit-msg').textContent = '登录后可提交成绩到排行榜';
+      document.getElementById('submit-score-section').style.display = 'block';
+      document.getElementById('submit-score-section').querySelector('.btns').innerHTML =
+        '<button class="primary" onclick="openAuth()">去登录</button>' +
+        '<button onclick="document.getElementById(\'submit-score-section\').style.display=\'none\'">跳过</button>';
+    }
+  } else {
+    banner.className = 'lose';
+    banner.textContent = '💥 踩雷了！点击笑脸重新开始';
+  }
+  renderBoard();
+}
+
+/* ═══════════════════════════════════════════════════════
+   4. 渲染
+═══════════════════════════════════════════════════════ */
+function renderBoard() {
+  const { rows, cols } = CONFIGS[currentDiff];
+  const boardEl = document.getElementById('board');
+  boardEl.style.gridTemplateColumns = `repeat(${cols}, 28px)`;
+  boardEl.style.gridTemplateRows = `repeat(${rows}, 28px)`;
+
+  // Reuse existing cells for performance
+  const existing = boardEl.children;
+  const needed = rows * cols;
+  while (boardEl.children.length > needed) boardEl.removeChild(boardEl.lastChild);
+  while (boardEl.children.length < needed) {
+    const el = document.createElement('div');
+    el.className = 'cell';
+    el.addEventListener('click', onCellClick);
+    el.addEventListener('contextmenu', onCellRightClick);
+    boardEl.appendChild(el);
+  }
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const cell = board[r][c];
+      const el = boardEl.children[r * cols + c];
+      el.dataset.r = r;
+      el.dataset.c = c;
+      el.className = 'cell';
+      el.textContent = '';
+
+      if (cell.wrongFlag) { el.classList.add('wrong-flag'); }
+      else if (cell.flag) { el.classList.add('flag'); }
+      else if (cell.open) {
+        el.classList.add('open');
+        if (cell.mine) {
+          el.classList.add('mine-hit');
+          el.textContent = '💣';
+        } else if (cell.adj > 0) {
+          el.textContent = cell.adj;
+          el.classList.add(`n${cell.adj}`);
+        }
+      } else if (!cell.mine && gameState === 'won') {
+        el.classList.add('open');
+      }
+    }
+  }
+}
+
+function onCellClick(e) {
+  if (gameState === 'won' || gameState === 'lost') return;
+  const r = +e.currentTarget.dataset.r;
+  const c = +e.currentTarget.dataset.c;
+  revealCell(r, c);
+}
+
+function onCellRightClick(e) {
+  e.preventDefault();
+  if (gameState === 'won' || gameState === 'lost') return;
+  const r = +e.currentTarget.dataset.r;
+  const c = +e.currentTarget.dataset.c;
+  toggleFlag(r, c);
+}
+
+/* ═══════════════════════════════════════════════════════
+   5. 认证 (Supabase Auth)
+═══════════════════════════════════════════════════════ */
+function openAuth()  { document.getElementById('auth-modal').classList.add('open'); }
+function closeAuth() { document.getElementById('auth-modal').classList.remove('open'); }
+
+function switchTab(t) {
+  document.getElementById('form-login').style.display    = t === 'login'    ? '' : 'none';
+  document.getElementById('form-register').style.display = t === 'register' ? '' : 'none';
+  document.getElementById('tab-login').classList.toggle('active', t === 'login');
+  document.getElementById('tab-register').classList.toggle('active', t === 'register');
+}
+
+async function doRegister() {
+  const name  = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const pwd   = document.getElementById('reg-pwd').value;
+  const msg   = document.getElementById('reg-msg');
+
+  if (!name || !email || !pwd) { msg.className='auth-msg error'; msg.textContent='请填写所有字段'; return; }
+  if (pwd.length < 6)          { msg.className='auth-msg error'; msg.textContent='密码至少 6 位'; return; }
+
+  msg.className='auth-msg'; msg.textContent='注册中…';
+
+  const { data, error } = await _supabase.auth.signUp({
+    email, password: pwd,
+    options: {
+      data: { username: name },
+      emailRedirectTo: window.location.origin + '/',
+    }
+  });
+
+  if (error) { msg.className='auth-msg error'; msg.textContent=error.message; return; }
+
+  // Also insert into profiles table
+  if (data.user) {
+    await _supabase.from('profiles').upsert({ id: data.user.id, username: name });
+  }
+
+  msg.className='auth-msg success';
+  msg.textContent = '注册成功！请检查邮箱验证（如无需验证则直接可用）';
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pwd   = document.getElementById('login-pwd').value;
+  const msg   = document.getElementById('login-msg');
+
+  if (!email || !pwd) { msg.className='auth-msg error'; msg.textContent='请填写邮箱和密码'; return; }
+  msg.className='auth-msg'; msg.textContent='登录中…';
+
+  try {
+    const { data, error } = await _supabase.auth.signInWithPassword({ email, password: pwd });
+    if (error) { msg.className='auth-msg error'; msg.textContent=error.message; return; }
+    closeAuth();
+  } catch (err) {
+    console.error('登录异常:', err);
+    msg.className='auth-msg error'; msg.textContent='登录失败，请检查网络后重试';
+  }
+}
+
+async function logout() {
+  // 1. 清除 Supabase 本地存储
+  Object.keys(localStorage).forEach(k => {
+    if (k.startsWith('sb-') || k.startsWith('supabase')) localStorage.removeItem(k);
+  });
+
+  // 2. 调 Supabase 服务端退出
+  try { await _supabase.auth.signOut(); } catch (e) {}
+
+  // 3. 刷新页面，确保客户端状态完全重置
+  location.reload();
+}
+
+function updateAuthUI() {
+  const loginBtn   = document.getElementById('btn-login');
+  const logoutBtn  = document.getElementById('btn-logout');
+  const userDisplay = document.getElementById('user-display');
+  if (currentUser) {
+    loginBtn.style.display  = 'none';
+    logoutBtn.style.display = '';
+    userDisplay.style.display = '';
+  } else {
+    loginBtn.style.display  = '';
+    logoutBtn.style.display = 'none';
+    userDisplay.style.display = 'none';
+  }
+}
+
+// Auth state listener
+_supabase.auth.onAuthStateChange(async (event, session) => {
+  currentUser = session?.user ?? null;
+  updateAuthUI();
+
+  const userDisplay = document.getElementById('user-display');
+  if (!userDisplay) return;
+
+  if (currentUser) {
+    // 优先用注册时存的 metadata，不用等 profiles 表查询
+    let name = currentUser.user_metadata?.username || currentUser.email || '用户';
+    userDisplay.textContent = name;
+    // 后台尝试从 profiles 表取更准确的用户名
+    try {
+      const { data } = await _supabase.from('profiles').select('username').eq('id', currentUser.id).single();
+      if (data?.username) userDisplay.textContent = data.username;
+    } catch {}
+  }
+});
+
+/* ═══════════════════════════════════════════════════════
+   6. 提交成绩
+═══════════════════════════════════════════════════════ */
+async function submitScore() {
+  if (!currentUser) { openAuth(); return; }
+  const sec = document.getElementById('submit-score-section');
+  const btn = sec.querySelector('.primary');
+  btn.disabled = true;
+  btn.textContent = '提交中…';
+
+  const { data: profile } = await _supabase
+    .from('profiles').select('username').eq('id', currentUser.id).single();
+
+  // Upsert: only keep personal best
+  const { data: existing } = await _supabase
+    .from('scores')
+    .select('time_seconds')
+    .eq('user_id', currentUser.id)
+    .eq('difficulty', currentDiff)
+    .maybeSingle();
+
+  if (existing && existing.time_seconds <= finishedAt) {
+    sec.innerHTML = '<p style="color:#888;font-size:13px;">你已有更好的成绩，未更新排行榜。</p>';
+    return;
+  }
+
+  const { error } = await _supabase.from('scores').upsert({
+    user_id:      currentUser.id,
+    username:     profile?.username || currentUser.email,
+    difficulty:   currentDiff,
+    time_seconds: finishedAt,
+    created_at:   new Date().toISOString(),
+  }, { onConflict: 'user_id,difficulty' });
+
+  if (error) {
+    sec.innerHTML = `<p style="color:red;font-size:13px;">提交失败: ${error.message}</p>`;
+    return;
+  }
+
+  sec.innerHTML = '<p style="color:#388e3c;font-size:14px;font-weight:500;">✅ 成绩已提交！</p>';
+  loadLeaderboard(lbDiff);
+}
+
+/* ═══════════════════════════════════════════════════════
+   7. 排行榜
+═══════════════════════════════════════════════════════ */
+function switchLbDiff(d) {
+  lbDiff = d;
+  document.querySelectorAll('.lb-tab').forEach(b => b.classList.toggle('active', b.dataset.d === d));
+  loadLeaderboard(d);
+}
+
+async function loadLeaderboard(diff) {
+  const list = document.getElementById('lb-list');
+  if (!list) return;
+  list.innerHTML = '<li class="lb-empty">加载中…</li>';
+
+  try {
+    // 加 10 秒超时，防止请求卡死
+    const result = await Promise.race([
+      _supabase
+        .from('scores')
+        .select('username, time_seconds')
+        .eq('difficulty', diff)
+        .order('time_seconds', { ascending: true })
+        .limit(20),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 10000)),
+    ]);
+
+    const { data, error } = result;
+
+    if (error) {
+      console.error('排行榜加载失败:', error.message);
+      list.innerHTML = `<li class="lb-empty">加载失败: ${error.message}<br><button class="lb-retry" onclick="loadLeaderboard('${diff}')">点击重试</button></li>`;
+      return;
+    }
+
+    if (!data?.length) {
+      list.innerHTML = '<li class="lb-empty">暂无记录，快来挑战！</li>';
+      return;
+    }
+
+    list.innerHTML = data.map((row, i) => {
+      const rankClass = i < 3 ? ` r${i+1}` : '';
+      return `<li>
+        <span class="lb-rank${rankClass}">${i+1}</span>
+        <span class="lb-name">${escapeHtml(row.username)}</span>
+        <span class="lb-time">${row.time_seconds}s</span>
+      </li>`;
+    }).join('');
+  } catch (err) {
+    console.error('排行榜请求异常:', err);
+    const msg = err.message === 'TIMEOUT' ? '加载超时，请检查网络' : '加载失败，请刷新重试';
+    list.innerHTML = `<li class="lb-empty">${msg}<br><button class="lb-retry" onclick="loadLeaderboard('${diff}')">点击重试</button></li>`;
+  }
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// Realtime subscription for leaderboard updates
+function subscribeLeaderboard() {
+  if (lbChannel) _supabase.removeChannel(lbChannel);
+  lbChannel = _supabase
+    .channel('scores-changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'scores' }, () => {
+      loadLeaderboard(lbDiff);
+    })
+    .subscribe();
+}
+
+/* ═══════════════════════════════════════════════════════
+   8. Init
+═══════════════════════════════════════════════════════ */
+newGame();
+loadLeaderboard('easy');
+subscribeLeaderboard();
+</script>
+</body>
+</html>
