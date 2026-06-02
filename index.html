@@ -324,6 +324,8 @@
     .lb-name { flex: 1; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .lb-time { color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums; }
     .lb-empty { text-align: center; color: var(--text-sub); font-size: 13px; padding: 20px 0; }
+    .lb-retry { margin-top: 8px; padding: 4px 14px; border: 1px solid var(--accent); border-radius: 4px; background: none; color: var(--accent); font-size: 12px; cursor: pointer; }
+    .lb-retry:hover { background: var(--accent); color: #fff; }
     .lb-live-dot {
       display: inline-block;
       width: 7px; height: 7px;
@@ -896,19 +898,26 @@ function switchLbDiff(d) {
 
 async function loadLeaderboard(diff) {
   const list = document.getElementById('lb-list');
+  if (!list) return;
   list.innerHTML = '<li class="lb-empty">加载中…</li>';
 
   try {
-    const { data, error } = await _supabase
-      .from('scores')
-      .select('username, time_seconds')
-      .eq('difficulty', diff)
-      .order('time_seconds', { ascending: true })
-      .limit(20);
+    // 加 10 秒超时，防止请求卡死
+    const result = await Promise.race([
+      _supabase
+        .from('scores')
+        .select('username, time_seconds')
+        .eq('difficulty', diff)
+        .order('time_seconds', { ascending: true })
+        .limit(20),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 10000)),
+    ]);
+
+    const { data, error } = result;
 
     if (error) {
       console.error('排行榜加载失败:', error.message);
-      list.innerHTML = `<li class="lb-empty">加载失败: ${error.message}</li>`;
+      list.innerHTML = `<li class="lb-empty">加载失败: ${error.message}<br><button class="lb-retry" onclick="loadLeaderboard('${diff}')">点击重试</button></li>`;
       return;
     }
 
@@ -927,7 +936,8 @@ async function loadLeaderboard(diff) {
     }).join('');
   } catch (err) {
     console.error('排行榜请求异常:', err);
-    list.innerHTML = '<li class="lb-empty">加载失败，请刷新重试</li>';
+    const msg = err.message === 'TIMEOUT' ? '加载超时，请检查网络' : '加载失败，请刷新重试';
+    list.innerHTML = `<li class="lb-empty">${msg}<br><button class="lb-retry" onclick="loadLeaderboard('${diff}')">点击重试</button></li>`;
   }
 }
 
